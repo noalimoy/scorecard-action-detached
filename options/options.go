@@ -44,6 +44,7 @@ var (
 	errResultsPathEmpty           = errors.New("results path is empty")
 	errGitHubRepoInfoUnavailable  = errors.New("GitHub repo info inaccessible")
 	errOnlyDefaultBranchSupported = errors.New("only default branch is supported")
+	errInvalidSource              = errors.New("source must be either 'local' or 'remote'")
 )
 
 // Options are options for running scorecard via GitHub Actions.
@@ -78,6 +79,7 @@ type Options struct {
 	InputResultsFile   string `env:"INPUT_RESULTS_FILE"`
 	InputResultsFormat string `env:"INPUT_RESULTS_FORMAT"`
 	InputFileMode      string `env:"INPUT_FILE_MODE"`
+	InputSource        string `env:"INPUT_SOURCE"`
 
 	PublishResults bool
 }
@@ -119,13 +121,22 @@ func (o *Options) Validate() error {
 		return errEmptyGitHubAuthToken
 	}
 
-	if !o.isPullRequestEvent() &&
+	// Validate source input if provided.
+	if o.InputSource != "" && o.InputSource != "local" && o.InputSource != "remote" {
+		return fmt.Errorf("%w: got %q", errInvalidSource, o.InputSource)
+	}
+
+	// Branch validation only applies to remote repository scanning, not local mode.
+	// If user explicitly set local input, or if we're using local mode (determined in setScorecardOpts),
+	// skip the branch validation.
+	if o.ScorecardOpts.Local == "" &&
+		!o.isPullRequestEvent() &&
 		!o.isDefaultBranch() {
 		fmt.Printf("%s not supported with %s event.\n", o.GithubRef, o.GithubEventName)
 		fmt.Printf("::error ::Only the default branch %s is supported.\n", o.DefaultBranch)
-
 		return errOnlyDefaultBranchSupported
 	}
+
 	if err := o.ScorecardOpts.Validate(); err != nil {
 		return fmt.Errorf("validating scorecard options: %w", err)
 	}
@@ -169,11 +180,26 @@ func (o *Options) setScorecardOpts() {
 	// --repo= | --local
 	// This section restores functionality that was removed in
 	// https://github.com/ossf/scorecard/pull/1898.
+	// Users can now explicitly set 'source' input to 'local' or 'remote' to override
+	// the automatic behavior. If not set, we fall back to automatic detection
+	// based on event type.
 	// TODO(options): Consider moving this to its own function.
-	if !o.isPullRequestEvent() {
+	source := strings.ToLower(strings.TrimSpace(o.InputSource))
+	if source == "local" {
+		// User explicitly requested local mode
+		// Use "." as the path, which will resolve relative to working-directory
+		o.ScorecardOpts.Local = "."
+	} else if source == "remote" {
+		// User explicitly requested remote repo mode
+		// Use the GitHub repository from context
 		o.ScorecardOpts.Repo = o.GithubRepository
 	} else {
-		o.ScorecardOpts.Local = "."
+		// Fall back to automatic behavior for backward compatibility
+		if !o.isPullRequestEvent() {
+			o.ScorecardOpts.Repo = o.GithubRepository
+		} else {
+			o.ScorecardOpts.Local = "."
+		}
 	}
 
 	// --format=
