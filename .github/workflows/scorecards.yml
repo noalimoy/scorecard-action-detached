@@ -1,6 +1,15 @@
 name: Scorecards supply-chain security
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to run scorecard analysis on'
+        required: true
+        type: choice
+        options:
+          - test/dogfood
+
+        default: 'test/dogfood'
 
 # Declare default permissions as read only.
 permissions: read-all
@@ -16,8 +25,10 @@ jobs:
      
     steps:
       - name: "Checkout code"
+        id: checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
+          ref: ${{ github.event.inputs.branch }}
           persist-credentials: false
 
       # This is a pre-submit / pre-release.
@@ -26,6 +37,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
+          source: local
           publish_results: true
 
       # Upload the results as artifacts (optional). Commenting out will disable uploads of run results in SARIF
@@ -33,7 +45,7 @@ jobs:
       - name: "Upload artifact"
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: SARIF file
+          name: SARIF file - ${{ github.event.inputs.branch }}
           path: results.sarif
           retention-days: 5
 
@@ -41,4 +53,5 @@ jobs:
       - name: "Upload to code-scanning"
         uses: github/codeql-action/upload-sarif@0499de31b99561a6d14a36a5f662c2a54f91beee # v4.31.2
         with:
-          sarif_file: results.sarif
+          ref: ${{ steps.checkout.outputs.ref }}
+          sha: ${{ steps.checkout.outputs.commit }}
