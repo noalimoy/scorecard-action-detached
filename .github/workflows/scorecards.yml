@@ -33,7 +33,7 @@ jobs:
 
       # This is a pre-submit / pre-release.
       - name: "Run analysis"
-        uses: noalimoy/scorecard-action-detached@main
+        uses: noalimoy/scorecard-action-detached@v0.1.0
         with:
           results_file: results.sarif
           results_format: sarif
