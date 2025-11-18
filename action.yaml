@@ -42,6 +42,10 @@ inputs:
     required: false
     default: archive
 
+  source:
+    description: "INPUT: Source of the code to scan. Use 'local' to scan the local directory (respects working-directory), or 'remote' to scan a remote repository (uses GITHUB_REPOSITORY). If not set, defaults to automatic detection based on event type."
+    required: false
+
   internal_publish_base_url:
     description: "INPUT: Base URL for publishing results. Used for testing."
     required: false
